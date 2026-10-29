@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+*.nbi
+*.nbc
+.coverage
+htmlcov/
+.pytest_cache/
+.hypothesis/
+data/*.parquet
+data/*.dbn*
+state/
+research_output/
+!research_output/.gitkeep
+*.egg-info/
+.env
+KILL

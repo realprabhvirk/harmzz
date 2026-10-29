@@ -1,0 +1,32 @@
+# VWAP pullback on MNQ, RTH session. All values are research defaults, not recommendations.
+strategy:
+  variant: vwap_pullback
+  session: rth
+  band_k: 2.0
+  atr_len: 14
+  slope_lookback: 15
+  fade_stop_atr: 2.0
+  fade_trend_filter: true
+  fade_trend_max_slope_atr: 1.0
+  warmup_minutes: 15
+  entry_start: "09:45"
+  entry_end: "15:30"
+  flat_time: "15:55"
+  max_trades_per_day: 3
+  cooldown_minutes: 15
+  max_daily_loss: 0.0
+  qty: 1
+costs:
+  instrument: MNQ
+  slippage_ticks: 1.0
+  commission_mult: 1.0
+  target_through_ticks: 1
+  initial_capital: 50000.0
+risk:
+  max_daily_loss: 300.0
+  max_position: 1
+  max_orders_per_day: 20
+  kill_file: KILL
+live:
+  port: 7497
+  state_dir: state
