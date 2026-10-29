@@ -14,7 +14,7 @@ import pandas as pd
 from numba import njit
 
 from nqbot.config import StrategyConfig, hhmm
-from nqbot.data import contract_ids, roll_guard
+from nqbot.data import contract_ids, effective_roll_spread, roll_guard
 from nqbot.sessions import session_arrays
 
 
@@ -96,7 +96,7 @@ def _feature_kernel(
 
 @dataclass
 class Features:
-    index: pd.DatetimeIndex
+    index: pd.DatetimeIndex | None
     open: np.ndarray
     high: np.ndarray
     low: np.ndarray
@@ -145,6 +145,30 @@ class Features:
         )
 
 
+def features_from_arrays(
+    o: np.ndarray,
+    h: np.ndarray,
+    low: np.ndarray,
+    c: np.ndarray,
+    v: np.ndarray,
+    cid: np.ndarray,
+    spread: np.ndarray,
+    time: dict[str, np.ndarray],
+    cfg: StrategyConfig,
+    guard: np.ndarray,
+    index: pd.DatetimeIndex | None = None,
+) -> Features:
+    vwap, sd, atr, slope, sess_bar = _feature_kernel(
+        o, h, low, c, v, cid, spread, time["session_id"], time["in_session"],
+        int(cfg.atr_len), int(cfg.slope_lookback),
+    )
+    return Features(
+        index=index, open=o, high=h, low=low, close=c, volume=v,
+        vwap=vwap, sd=sd, atr=atr, slope=slope, sess_bar=sess_bar,
+        cid=cid, roll_guard=np.asarray(guard, dtype=bool), time=time,
+    )
+
+
 def compute_features(
     df: pd.DataFrame,
     cfg: StrategyConfig,
@@ -152,17 +176,9 @@ def compute_features(
 ) -> Features:
     """Features for a canonical bar frame (see nqbot.data).
 
-    ``guard`` overrides the roll guard (live passes its calendar-derived guard).
+    ``guard`` overrides the roll guard (calendar information).
     """
-    from nqbot.data import effective_roll_spread
-
-    o = df["open"].to_numpy(np.float64)
-    h = df["high"].to_numpy(np.float64)
-    low = df["low"].to_numpy(np.float64)
-    c = df["close"].to_numpy(np.float64)
-    v = df["volume"].to_numpy(np.float64)
     cid = contract_ids(df["contract"])
-    spread = effective_roll_spread(df)
     time = session_arrays(
         df.index,
         cfg.session,
@@ -170,14 +186,16 @@ def compute_features(
         entry_end=hhmm(cfg.entry_end),
         trade_holidays=cfg.trade_holidays,
     )
-    vwap, sd, atr, slope, sess_bar = _feature_kernel(
-        o, h, low, c, v, cid, spread, time["session_id"], time["in_session"],
-        int(cfg.atr_len), int(cfg.slope_lookback),
-    )
-    if guard is None:
-        guard = roll_guard(cid)
-    return Features(
-        index=df.index, open=o, high=h, low=low, close=c, volume=v,
-        vwap=vwap, sd=sd, atr=atr, slope=slope, sess_bar=sess_bar,
-        cid=cid, roll_guard=np.asarray(guard, dtype=bool), time=time,
+    return features_from_arrays(
+        df["open"].to_numpy(np.float64),
+        df["high"].to_numpy(np.float64),
+        df["low"].to_numpy(np.float64),
+        df["close"].to_numpy(np.float64),
+        df["volume"].to_numpy(np.float64),
+        cid,
+        effective_roll_spread(df),
+        time,
+        cfg,
+        roll_guard(cid) if guard is None else guard,
+        df.index,
     )

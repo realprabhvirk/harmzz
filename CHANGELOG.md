@@ -62,3 +62,27 @@
 - First draft of the research report ran cost sensitivity with the config
   selected on dev+validation, evaluated on validation (in-sample). It now runs
   on the walk-forward OOS path.
+
+### Stage 5 — live bot
+- `LiveRunner` drives the same `nqbot.core` kernel and strategy signal code as
+  the backtester (no separate live strategy implementation).
+- `SimBroker` replay uses the backtester's fill functions; replay == backtest
+  to the tick (parity tests incl. stops, targets, rolls, gaps, zero-volume bars,
+  qty > 1, globex session, strategy daily-loss gating, crash/restart mid-position).
+- `IBBroker` (ib_async/ib_insync API): market-parent bracket with GTC OCO
+  stop/target, stop acknowledgement required (else cancel + `OrderRejected`),
+  fill polling from executions, own-fill position tracking with delayed-report
+  tolerance, partial-fill resize, flatten with confirmation. Tested against a
+  fake IB only.
+- "Never without a resting stop": invariant enforced every bar/tick; protective
+  stop placement failure -> flatten + halt.
+- Startup/reconnect reconciliation, exponential-backoff reconnect, stale-data
+  levels, KILL file, flat window, daily loss, max position, max orders, reject
+  limit; state persisted atomically (save on change), halts persist until cleared.
+- Paper by default; live needs env var + `--live` + typed confirmation; paper
+  refuses non-`DU` accounts. Optional Slack/Telegram alerts from env vars.
+
+### Bugs found and fixed
+- Replay persisted state every bar because NaNs in the state vector made the
+  change detection always fire (and `decide` stamped a timestamp every bar);
+  both fixed, replay is ~8x faster.

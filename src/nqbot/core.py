@@ -243,7 +243,6 @@ def decide(
     st[S_PEND] = PEND_NONE
     st[S_PEND_REASON] = EXIT_NONE
     now = label_min + 1.0
-    st[S_PEND_MIN] = now
     dmod = et_mod + 1
     el = sess_el + 1
     pos = st[S_POS]
@@ -258,6 +257,7 @@ def decide(
         if reason != EXIT_NONE:
             st[S_PEND] = PEND_FLATTEN
             st[S_PEND_REASON] = reason
+            st[S_PEND_MIN] = now
         return
     if guard or sig_dir == 0:
         return
@@ -274,6 +274,7 @@ def decide(
     if not (np.isfinite(sig_stop) and np.isfinite(sig_tgt)):
         return
     st[S_PEND] = PEND_ENTRY
+    st[S_PEND_MIN] = now
     st[S_PEND_DIR] = sig_dir
     st[S_PEND_STOP] = sig_stop
     st[S_PEND_TGT] = sig_tgt

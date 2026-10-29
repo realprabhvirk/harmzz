@@ -151,6 +151,51 @@ def session_arrays(
     }
 
 
+_EPOCH_NAIVE = dt.datetime(1970, 1, 1)
+
+
+def bar_time_fields(
+    utc_min: int,
+    mode: str = "rth",
+    flat_time: int = 15 * 60 + 55,
+    entry_end: int = 15 * 60 + 30,
+    trade_holidays: bool = False,
+) -> dict[str, int | bool]:
+    """Scalar version of ``session_arrays`` for one bar (used by the live runner).
+
+    Must agree exactly with ``session_arrays``; tests check this across DST days.
+    """
+    wall = dt.datetime.fromtimestamp(int(utc_min) * 60, tz=ET).replace(tzinfo=None)
+    lmin = int((wall - _EPOCH_NAIVE).total_seconds()) // 60
+    et_mod = lmin % 1440
+    if mode == "rth":
+        session_id = lmin // 1440
+        sess_el = et_mod - RTH_START
+    elif mode == "globex":
+        session_id = (lmin + (1440 - GLOBEX_START)) // 1440
+        sess_el = (et_mod - GLOBEX_START) % 1440
+    else:
+        raise ValueError(f"unknown session mode {mode!r}")
+    close, holiday = session_close_mod(EPOCH + dt.timedelta(days=session_id))
+    if mode == "rth":
+        in_session = RTH_START <= et_mod < close
+    else:
+        in_session = not (HALT_START <= et_mod < GLOBEX_START)
+    flat_mod = min(flat_time, close - 5)
+    entry_end_mod = min(entry_end, flat_mod - (flat_time - entry_end))
+    if holiday and not trade_holidays:
+        entry_end_mod = NO_ENTRY
+    return {
+        "utc_min": int(utc_min),
+        "et_mod": et_mod,
+        "session_id": session_id,
+        "in_session": in_session,
+        "sess_el": sess_el,
+        "flat_mod": flat_mod,
+        "entry_end_mod": entry_end_mod,
+    }
+
+
 def in_window(mod: int, start: int, end: int) -> bool:
     """Is minute-of-day ``mod`` in [start, end)? Handles windows that wrap midnight."""
     if start <= end:
