@@ -86,3 +86,11 @@
 - Replay persisted state every bar because NaNs in the state vector made the
   change detection always fire (and `decide` stamped a timestamp every bar);
   both fixed, replay is ~8x faster.
+
+### Stage 6 — data fetch and docs
+- `fetch_nq_data.py`: Databento GLBX.MDP3 `NQ.v.0` + `NQ.v.1` 1-minute download,
+  cost estimate + confirmation, roll spread from the second month (pure,
+  tested `build_canonical`; the network path is untested here).
+- README (setup, data, backtest, research, paper trading, go-live checklist),
+  RESULTS (no real-data results yet; verified mechanics; limitations and
+  what is not modelled).
