@@ -34,7 +34,8 @@ S_PEND_STOP = 13
 S_PEND_TGT = 14
 S_PEND_REASON = 15
 S_ENTRY_MIN = 16
-N_STATE = 17
+S_PEND_MIN = 17  # decision clock (utc minute) of the pending action
+N_STATE = 18
 
 # ---- pending actions ---------------------------------------------------------
 PEND_NONE = 0
@@ -73,7 +74,8 @@ P_POINT_VALUE = 7
 P_COMMISSION = 8  # per contract per side
 P_SLIP_TICKS = 9
 P_THROUGH_TICKS = 10
-N_PARAMS = 11
+P_ENTRY_DELAY = 11  # an entry order not filled within this many minutes is cancelled
+N_PARAMS = 12
 
 
 def pack_params(strategy: StrategyConfig, costs: CostConfig) -> np.ndarray:
@@ -90,6 +92,7 @@ def pack_params(strategy: StrategyConfig, costs: CostConfig) -> np.ndarray:
     p[P_COMMISSION] = costs.commission
     p[P_SLIP_TICKS] = costs.slippage_ticks
     p[P_THROUGH_TICKS] = costs.target_through_ticks
+    p[P_ENTRY_DELAY] = strategy.entry_max_delay_minutes
     return p
 
 
@@ -199,6 +202,26 @@ def on_exit(
 
 
 @njit(cache=True)
+def entry_expired(st: np.ndarray, p: np.ndarray, label_min: float) -> bool:
+    """A pending entry whose next available bar starts too late (data gap) is cancelled."""
+    return label_min - st[S_PEND_MIN] > p[P_ENTRY_DELAY]
+
+
+@njit(cache=True)
+def flatten_reason_at_open(st: np.ndarray, et_mod: int, session_id: int, flat_mod: int) -> int:
+    """Checked at the START of a bar (its open). Catches positions that survived a
+    data gap past the flat deadline or into a new session; returns an exit reason
+    (EXIT_NONE when nothing to do). Normal flattening happens via decide()."""
+    if st[S_POS] == 0:
+        return EXIT_NONE
+    if session_id != st[S_POS_SESSION]:
+        return EXIT_SESSION
+    if et_mod >= flat_mod:
+        return EXIT_FLAT_TIME
+    return EXIT_NONE
+
+
+@njit(cache=True)
 def decide(
     st: np.ndarray,
     p: np.ndarray,
@@ -220,6 +243,7 @@ def decide(
     st[S_PEND] = PEND_NONE
     st[S_PEND_REASON] = EXIT_NONE
     now = label_min + 1.0
+    st[S_PEND_MIN] = now
     dmod = et_mod + 1
     el = sess_el + 1
     pos = st[S_POS]

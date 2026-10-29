@@ -41,3 +41,24 @@
   side, exit reason, volatility regime; trade-order bootstrap of drawdown.
 - Data-quality script (gaps, duplicates, bad ticks, coverage, rolls, tz/DST).
 - Benchmark: 5.2M synthetic bars backtest in ~4-7 s after JIT warm-up.
+
+### Stage 4 — research harness
+- 60/20/20 split by ET date; holdout bars physically removed during `develop`.
+- Coarse grids (24 + 24 configs), neighbour/plateau scoring, anchored
+  walk-forward over 4 validation folds, cumulative trial log per dataset.
+- Cost sensitivity (slippage 0.5-3 ticks x commission x1/x1.5/x2) on the
+  walk-forward OOS path and on the holdout.
+- Breakdowns by year, volatility regime, entry hour, side; trade-order bootstrap.
+- One-shot holdout with a lock file; `--force-rerun-holdout` is flagged in the report.
+
+### Bugs found and fixed (with regression tests)
+- Property test found that a missing bar right before the flat deadline (e.g.
+  zero-volume 15:54 bar) let a position survive into the 15:55 bar. The kernel
+  now also checks at each bar's open and flattens positions past the deadline
+  or carried into a new session (`test_missing_bar_before_flat_time_regression`,
+  `test_session_gap_closes_at_first_open_of_new_session`). Entry orders whose
+  next bar starts > `entry_max_delay_minutes` after the decision are cancelled
+  (`test_entry_cancelled_after_data_gap`).
+- First draft of the research report ran cost sensitivity with the config
+  selected on dev+validation, evaluated on validation (in-sample). It now runs
+  on the walk-forward OOS path.

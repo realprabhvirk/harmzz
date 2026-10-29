@@ -196,17 +196,6 @@ def test_session_carry_is_flattened() -> None:
     assert t.exit_time == pd.Timestamp(f"{day} 13:10", tz="America/New_York")
 
 
-def test_globex_session_carry_flatten() -> None:
-    # bars only up to 11:00, then the next session: position must not survive into it
-    rows = {k: v for k, v in day_rows(DAY).items() if k < f"{DAY} 11:00"}
-    rows.update(day_rows("2024-03-13"))
-    df = bars_from(rows)
-    res = run(df, signals_at(df, {f"{DAY} 10:00": (1, 90.0, 120.0)}), nq_cfg())
-    t = res.trades.iloc[0]
-    assert t.exit_reason in ("session", "flat_time")
-    assert t.exit_time.tz_convert("America/New_York").date().isoformat() == "2024-03-13"
-
-
 def test_holiday_no_entries() -> None:
     day = "2024-01-15"  # MLK day
     df = bars_from(day_rows(day, end="13:00"))
@@ -250,3 +239,40 @@ def test_no_trades_summary() -> None:
     df = bars_from(day_rows(DAY))
     res = run(df, signals_at(df, {}), nq_cfg())
     assert res.summary["trades"] == 0 and res.summary["net"] == 0
+
+
+def test_missing_bar_before_flat_time_regression() -> None:
+    """Regression (found by the property test): with the 15:54 bar missing, the
+    position used to survive the 15:55 bar. It must close at the 15:55 open."""
+    rows = day_rows(DAY)
+    del rows[f"{DAY} 15:54"]
+    rows[f"{DAY} 15:55"] = [103.0, 104.0, 102.0, 103.0, 10]
+    _, res = _one_trade(rows, entry=(1, 90.0, 120.0))
+    t = res.trades.iloc[0]
+    assert t.exit_reason == "flat_time"
+    assert t.exit_time == pd.Timestamp(f"{DAY} 15:55", tz="America/New_York")
+    assert t.exit_fill == 102.75
+
+
+def test_session_gap_closes_at_first_open_of_new_session() -> None:
+    rows = {k: v for k, v in day_rows(DAY).items() if k < f"{DAY} 11:00"}
+    nxt = day_rows("2024-03-13")
+    nxt["2024-03-13 09:30"] = [97.0, 98.0, 96.0, 97.0, 10]
+    rows.update(nxt)
+    df = bars_from(rows)
+    res = run(df, signals_at(df, {f"{DAY} 10:00": (1, 90.0, 120.0)}), nq_cfg())
+    t = res.trades.iloc[0]
+    assert t.exit_reason == "session"
+    assert t.exit_time == pd.Timestamp("2024-03-13 09:30", tz="America/New_York")
+    assert t.exit_theo == 97.0
+
+
+def test_entry_cancelled_after_data_gap() -> None:
+    rows = day_rows(DAY)
+    for m in range(1, 10):  # bars 10:01..10:09 missing
+        del rows[f"{DAY} 10:{m:02d}"]
+    df = bars_from(rows)
+    res = run(df, signals_at(df, {f"{DAY} 10:00": (1, 90.0, 120.0)}), nq_cfg())
+    assert len(res.trades) == 0
+    res = run(df, signals_at(df, {f"{DAY} 10:00": (1, 90.0, 120.0)}), nq_cfg(entry_max_delay_minutes=15))
+    assert len(res.trades) == 1

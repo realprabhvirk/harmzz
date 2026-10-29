@@ -49,6 +49,7 @@ class StrategyConfig:
     cooldown_minutes: int = 15
     max_daily_loss: float = 0.0  # currency, realised net; 0 disables
     trade_holidays: bool = False
+    entry_max_delay_minutes: int = 2  # cancel an entry if the next bar starts later than this
     qty: int = 1
 
     def validate(self) -> None:
@@ -62,7 +63,7 @@ class StrategyConfig:
             raise ValueError("band_k must be > 0")
         if self.qty < 1:
             raise ValueError("qty must be >= 1")
-        if self.max_trades_per_day < 0 or self.cooldown_minutes < 0 or self.warmup_minutes < 0:
+        if min(self.max_trades_per_day, self.cooldown_minutes, self.warmup_minutes, self.entry_max_delay_minutes) < 0:
             raise ValueError("counts/minutes must be >= 0")
         s, e, f = hhmm(self.entry_start), hhmm(self.entry_end), hhmm(self.flat_time)
         if not s <= e < f:

@@ -1,7 +1,11 @@
 """Bracket-order backtester (numba). Uses the shared kernel in nqbot.core.
 
 Per bar t:
-  1. a pending action decided at t-1 fills at open[t] (entry or flatten)
+  1. a pending action decided at t-1 fills at open[t] (entry or flatten); an
+     entry whose next bar starts more than entry_max_delay_minutes after the
+     decision (data gap) is cancelled
+  1b. a position that survived a data gap past the flat deadline or into a new
+     session is closed at open[t]
   2. an open position (including one entered at this open) is checked against
      the bracket using high/low[t]
   3. on the last bar any open position is closed at close[t] (end_of_data)
@@ -40,6 +44,8 @@ from nqbot.core import (
     bracket_check,
     commission_per_fill,
     decide,
+    entry_expired,
+    flatten_reason_at_open,
     market_fill,
     new_state,
     on_entry,
@@ -100,6 +106,8 @@ def _run_kernel(
         roll_session(st, session_id[t])
         t_min = float(utc_min[t])
         pend = st[S_PEND]
+        if pend == PEND_ENTRY and entry_expired(st, p, t_min):
+            pend = 0.0
         if pend == PEND_ENTRY:
             d = int(st[S_PEND_DIR])
             qty = p[P_QTY]
@@ -121,6 +129,11 @@ def _run_kernel(
             fill = market_fill(o[t], side, p)
             cash += _close_trade(rec, k - 1, st, t, o[t], fill, int(st[S_PEND_REASON]), t_min, p)
         st[S_PEND] = 0.0
+
+        reason = flatten_reason_at_open(st, et_mod[t], session_id[t], flat_mod[t])
+        if reason != EXIT_NONE:
+            side = -int(st[S_POS])
+            cash += _close_trade(rec, k - 1, st, t, o[t], market_fill(o[t], side, p), reason, t_min, p)
 
         if st[S_POS] != 0:
             code, theo, fill = bracket_check(int(st[S_POS]), st[S_STOP], st[S_TGT], o[t], h[t], low[t], p)
