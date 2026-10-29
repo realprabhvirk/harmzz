@@ -29,3 +29,15 @@
 - `vwap_fade` and `vwap_pullback`, pure vectorised signal functions.
 - Causality checker (signal-level and engine-level); a deliberately leaky
   strategy is shown to fail it.
+
+### Stage 3 — engine
+- Shared numba kernel (`nqbot.core`): gating/decision, bracket fill rules,
+  trade bookkeeping. Backtest loop in `nqbot.engine`.
+- Stop/target simulation: next-open entries, entry bar checked, stop-first on
+  ambiguous bars, gap-through-stop at the open, slippage on market fills only,
+  target needs a 1-tick trade-through, time/roll/session flatten at next open,
+  end-of-data flatten at last close.
+- Gross / slippage / commission / net breakdown, breakdowns by year, hour,
+  side, exit reason, volatility regime; trade-order bootstrap of drawdown.
+- Data-quality script (gaps, duplicates, bad ticks, coverage, rolls, tz/DST).
+- Benchmark: 5.2M synthetic bars backtest in ~4-7 s after JIT warm-up.

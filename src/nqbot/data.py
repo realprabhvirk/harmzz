@@ -201,6 +201,7 @@ def synthetic_bars(
     low = np.minimum(np.minimum(open_, close), np.floor((np.minimum(open_, close) - ext[1]) / tick) * tick)
 
     vol_shape = _intraday_vol_shape(et_mod)
+    vol_shape[et_mod == 570] *= 4.0  # opening print, as in real data
     volume = np.maximum(1, np.round(400 * vol_shape * rng.lognormal(0.0, 0.5, n)))
     if zero_volume_frac > 0:
         volume[rng.random(n) < zero_volume_frac] = 0
